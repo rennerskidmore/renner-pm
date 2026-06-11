@@ -26,13 +26,22 @@ Deno.serve(async (req: Request) => {
   const rest = parts.slice(2);
 
   try {
-    // UI
+    // UI — served from pm.app_config('ui_html') so UI updates need no
+    // function redeploy (PUT /api/ui below); bundled placeholder as fallback.
     if (rest.length === 0) {
       if (!url.pathname.endsWith('/')) {
-        // Relative fetches in the page need the trailing slash.
-        return Response.redirect(url.origin + url.pathname + '/', 301);
+        // Relative fetches in the page need the trailing slash. The platform
+        // rewrites the URL internally, so build the external URL from the
+        // project's public base (SUPABASE_URL is auto-injected).
+        return new Response(null, {
+          status: 301,
+          headers: { Location: `${Deno.env.get('SUPABASE_URL')}/functions/v1/pm-app/${secret}/` },
+        });
       }
-      return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      const rows = await sql`select value from pm.app_config where key = 'ui_html'`;
+      return new Response(rows[0]?.value ?? html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
     if (rest[0] !== 'api') return notFound();
@@ -104,6 +113,18 @@ Deno.serve(async (req: Request) => {
     // GET /api/stats
     if (req.method === 'GET' && route[0] === 'stats') {
       return json(await getStats(q.get('board') ?? undefined));
+    }
+
+    // PUT /api/ui — upload a new UI build (body = full HTML document).
+    if (req.method === 'PUT' && route[0] === 'ui') {
+      const body = await req.text();
+      if (!body.toLowerCase().includes('<!doctype html')) {
+        return json({ error: 'body must be a full HTML document' }, 400);
+      }
+      await sql`
+        insert into pm.app_config (key, value) values ('ui_html', ${body})
+        on conflict (key) do update set value = excluded.value`;
+      return json({ ok: true, bytes: body.length });
     }
 
     // POST /api/import — bulk idempotent upsert used by the migration loader.
