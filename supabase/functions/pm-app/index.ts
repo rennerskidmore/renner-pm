@@ -8,14 +8,24 @@ import {
 } from './db.ts';
 import html from './html.ts';
 
+// The interactive UI is hosted on GitHub Pages (the *.supabase.co functions
+// domain force-rewrites HTML to text/plain + a sandbox CSP), so the API must be
+// callable cross-origin. Auth is the secret path, not the Origin, so `*` is safe.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Max-Age': '86400',
+};
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS },
   });
-const notFound = () => new Response('Not found', { status: 404 });
+const notFound = () => new Response('Not found', { status: 404, headers: CORS });
 
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
   // Path arrives as /pm-app/... (the /functions/v1 prefix is stripped by the
   // platform; tolerate it anyway).
