@@ -4,6 +4,39 @@ A lightweight project-management system replacing Trello (and the
 GitHub-issues-as-tasks stopgap). Built 2026-06-11. Three boards — **Personal**,
 **Intuitive Intel**, **VOTF** — with the full year of task history migrated in.
 
+## View your PM in the browser
+
+The board + dashboard run as a web app — no install, works on desktop and phone.
+
+**Recommended — GitHub Pages:** https://rennerskidmore.github.io/renner-pm/
+
+On your **first** visit, append your access key once:
+
+```
+https://rennerskidmore.github.io/renner-pm/?key=<UI_SECRET>
+```
+
+The page saves the key to the browser's localStorage and strips it from the
+address bar, so every later visit just needs the bare URL above. If the browser
+data is cleared, it re-prompts for the key. (On mobile, open it once with `?key=`
+then "Add to Home Screen" for an app-like icon.)
+
+**Direct link (bypasses Pages, serves the UI straight from the API):**
+
+```
+https://scypfjpovfmgzbdnpwpz.supabase.co/functions/v1/pm-app/<UI_SECRET>/
+```
+
+`<UI_SECRET>` is the capability key — it *is* the auth, so treat it like a
+password (don't commit or share it; a wrong key returns 404). Retrieve the
+current value with:
+
+```sql
+select value from pm.app_config where key = 'ui_secret';
+```
+
+To rotate it, update that row (see "Where everything lives" below).
+
 ## Where everything lives
 
 | Component | Location |
