@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>renner-pm</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<style>
+  :root {
+    --bg:#f4f5f7; --col:#ebecf0; --card:#fff; --ink:#172b4d; --muted:#5e6c84;
+    --high:#c9372c; --medium:#e07a06; --low:#7a869a; --accent:#0052cc;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 16px; background:#fff; border-bottom:1px solid #dfe1e6; position:sticky; top:0; z-index:10; }
+  header h1 { font-size:16px; margin:0 12px 0 0; }
+  .tabs { display:flex; gap:4px; }
+  .tab { padding:5px 12px; border-radius:4px; cursor:pointer; border:none; background:transparent; font-size:13px; color:var(--ink); }
+  .tab.active { background:var(--accent); color:#fff; }
+  .filters { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-left:auto; }
+  .chip { padding:3px 10px; border-radius:12px; border:1px solid #c1c7d0; background:#fff; cursor:pointer; font-size:12px; }
+  .chip.active { border-color:var(--accent); background:#deebff; color:var(--accent); }
+  select, input[type=search] { padding:5px 8px; border:1px solid #c1c7d0; border-radius:4px; font-size:13px; background:#fff; }
+  .toggle { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:3px; cursor:pointer; }
+  #board { display:flex; gap:12px; padding:14px 16px; overflow-x:auto; align-items:flex-start; min-height:calc(100vh - 60px); }
+  .column { background:var(--col); border-radius:8px; min-width:280px; width:280px; padding:8px; flex-shrink:0; }
+  .column h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:4px 6px 8px; display:flex; justify-content:space-between; }
+  .column.dragover { outline:2px dashed var(--accent); }
+  .cards { display:flex; flex-direction:column; gap:6px; min-height:8px; }
+  .card { background:var(--card); border-radius:6px; padding:8px 10px; box-shadow:0 1px 1px rgba(9,30,66,.25); cursor:pointer; }
+  .card:hover { background:#fafbfc; }
+  .card .t { word-wrap:break-word; }
+  .card.archived { opacity:.55; }
+  .meta { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; align-items:center; }
+  .pill { font-size:11px; padding:1px 7px; border-radius:9px; color:#fff; }
+  .pill.high{background:var(--high)} .pill.medium{background:var(--medium)} .pill.low{background:var(--low)}
+  .duechip { font-size:11px; padding:1px 6px; border-radius:4px; background:#f1f2f4; color:var(--muted); }
+  .duechip.overdue { background:var(--high); color:#fff; }
+  .duechip.done { background:#dcfff1; color:#216e4e; }
+  .lbl { font-size:11px; padding:1px 6px; border-radius:4px; background:#e4e6ea; color:var(--muted); }
+  .bbadge { font-size:10px; padding:1px 6px; border-radius:4px; color:#fff; }
+  .cnt { font-size:11px; color:var(--muted); }
+  .bucket-head { font-size:11px; color:var(--muted); margin:8px 4px 4px; cursor:pointer; user-select:none; }
+  .bucket-head:hover { color:var(--ink); }
+  .addrow { margin-top:6px; }
+  .addrow input { width:100%; padding:6px 8px; border:1px solid #c1c7d0; border-radius:4px; font-size:13px; }
+  .addbtn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px; padding:4px 6px; }
+  .addbtn:hover { color:var(--ink); }
+  /* modal */
+  #overlay { position:fixed; inset:0; background:rgba(9,30,66,.5); display:none; z-index:20; overflow-y:auto; }
+  #modal { background:#fff; max-width:680px; margin:6vh auto; border-radius:10px; padding:20px 24px; position:relative; }
+  #modal h3 { margin:0 0 4px; }
+  #modal h3 input { width:100%; font:600 18px inherit; border:none; padding:4px 0; color:var(--ink); background:transparent; }
+  #modal h3 input:focus { outline:1px solid var(--accent); background:#fff; }
+  .mrow { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; align-items:center; }
+  .mrow label { font-size:12px; color:var(--muted); }
+  .msec { margin:16px 0 0; }
+  .msec h4 { font-size:12px; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+  #mdesc { background:#f8f9fa; border-radius:6px; padding:10px 12px; cursor:text; min-height:36px; }
+  #mdesc:empty::before { content:'Add a description…'; color:var(--muted); }
+  #mdesc-edit { width:100%; min-height:120px; font:13px/1.5 inherit; padding:8px; border:1px solid #c1c7d0; border-radius:6px; }
+  .clitem { display:flex; gap:7px; align-items:baseline; padding:2px 0; }
+  .clitem.done span { text-decoration:line-through; color:var(--muted); }
+  .comment { margin:8px 0; }
+  .comment .who { font-size:12px; color:var(--muted); }
+  .comment .body { background:#f4f5f7; border-radius:6px; padding:6px 10px; margin-top:2px; }
+  #mclose { position:absolute; top:12px; right:14px; background:none; border:none; font-size:20px; cursor:pointer; color:var(--muted); }
+  textarea#newcomment { width:100%; min-height:54px; padding:8px; border:1px solid #c1c7d0; border-radius:6px; font:13px inherit; }
+  button.primary { background:var(--accent); color:#fff; border:none; border-radius:4px; padding:6px 14px; cursor:pointer; font-size:13px; }
+  button.quiet { background:#f1f2f4; color:var(--ink); border:none; border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .src { font-size:12px; }
+  /* dashboard */
+  #dash { padding:18px; max-width:1100px; margin:0 auto; display:none; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+  .tile { background:#fff; border-radius:8px; padding:14px 16px; box-shadow:0 1px 2px rgba(9,30,66,.15); }
+  .tile .n { font-size:28px; font-weight:700; }
+  .tile .l { font-size:12px; color:var(--muted); }
+  .charts { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .chartbox { background:#fff; border-radius:8px; padding:14px; box-shadow:0 1px 2px rgba(9,30,66,.15); }
+  .chartbox.wide { grid-column:1 / -1; }
+  .chartbox h4 { margin:0 0 8px; font-size:13px; color:var(--muted); }
+  table.due { width:100%; border-collapse:collapse; font-size:13px; }
+  table.due td, table.due th { text-align:left; padding:5px 8px; border-bottom:1px solid #ebecf0; }
+  table.due tr:hover { background:#f8f9fa; cursor:pointer; }
+  .od { color:var(--high); font-weight:600; }
+  @media (max-width:760px){ .charts{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header>
+  <h1>renner-pm</h1>
+  <nav class="tabs" id="viewtabs">
+    <button class="tab active" data-view="board">Board</button>
+    <button class="tab" data-view="dash">Dashboard</button>
+  </nav>
+  <nav class="tabs" id="boardtabs"></nav>
+  <div class="filters" id="filterbar">
+    <span class="chip" data-pri="high">High</span>
+    <span class="chip" data-pri="medium">Medium</span>
+    <span class="chip" data-pri="low">Low</span>
+    <select id="labelsel"><option value="">All labels</option></select>
+    <input type="search" id="q" placeholder="Search…">
+    <label class="toggle"><input type="checkbox" id="showref">reference</label>
+    <label class="toggle"><input type="checkbox" id="showarch">archived</label>
+  </div>
+</header>
+
+<div id="board"></div>
+
+<div id="dash">
+  <div class="tiles" id="tiles"></div>
+  <div class="charts">
+    <div class="chartbox"><h4>Open work by board &amp; status</h4><canvas id="c-board"></canvas><div id="f-board"></div></div>
+    <div class="chartbox"><h4>Open tasks by priority</h4><canvas id="c-pri"></canvas><div id="f-pri"></div></div>
+    <div class="chartbox wide"><h4>Created vs completed — last 12 months</h4><canvas id="c-month"></canvas><div id="f-month"></div></div>
+    <div class="chartbox wide"><h4>Due in the next 14 days</h4><div id="duesoon"></div></div>
+  </div>
+</div>
+
+<div id="overlay"><div id="modal"></div></div>
+
+<script>
+'use strict';
+// This page is hosted on GitHub Pages; the API lives on the Supabase edge
+// function under a secret path. The project URL is not secret and is baked in;
+// the secret is supplied at runtime via ?key=…, localStorage, or a prompt, so
+// it never lives in the repo.
+const API_ROOT = 'https://scypfjpovfmgzbdnpwpz.supabase.co/functions/v1/pm-app';
+function resolveKey() {
+  const u = new URL(location.href);
+  let key = u.searchParams.get('key');
+  if (key) {
+    localStorage.setItem('pm_key', key);
+    u.searchParams.delete('key');
+    history.replaceState(null, '', u.pathname + u.search + u.hash); // strip secret from the bar
+    return key;
+  }
+  key = localStorage.getItem('pm_key');
+  if (!key) {
+    key = (prompt('Enter your renner-pm access key (the long hex string from your URL):') || '').trim();
+    if (key) localStorage.setItem('pm_key', key);
+  }
+  return key;
+}
+const API_BASE = API_ROOT + '/' + resolveKey() + '/';
+const api = (p, opt) => fetch(API_BASE + 'api/' + p, opt).then(r => r.json());
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const md = s => (window.marked ? marked.parse(s ?? '') : '<pre style="white-space:pre-wrap">' + esc(s) + '</pre>');
+const PRI_ORDER = { high:0, medium:1, low:2, none:3 };
+const STATUS_COLS = ['icebox','todo','doing','done'];
+const COL_NAMES = { icebox:'Icebox', todo:'To do', doing:'Doing', done:'Done', reference:'Reference' };
+
+const state = {
+  view:'board', board:'', pri:'', label:'', q:'',
+  showref:false, showarch:false,
+  boards:[], tasks:[], expandedBuckets:new Set(),
+};
+const boardColor = k => (state.boards.find(b => b.key === k) || {}).color || '#888';
+const boardName  = k => (state.boards.find(b => b.key === k) || {}).name || k;
+
+// ---------- data ----------
+async function loadBoards() {
+  state.boards = await api('boards');
+  const tabs = document.getElementById('boardtabs');
+  tabs.innerHTML = '<button class="tab' + (state.board ? '' : ' active') + '" data-board="">All</button>' +
+    state.boards.map(b => '<button class="tab' + (state.board === b.key ? ' active' : '') + '" data-board="' + b.key + '">' + esc(b.name) + ' <span class="cnt">' + b.open_count + '</span></button>').join('');
+}
+async function loadTasks() {
+  const p = new URLSearchParams({ limit: 1000 });
+  if (state.board) p.set('board', state.board);
+  if (state.pri) p.set('priority', state.pri);
+  if (state.label) p.set('label', state.label);
+  if (state.q) p.set('q', state.q);
+  if (state.showarch) p.set('archived', 'true');
+  const r = await api('tasks?' + p);
+  state.tasks = r.tasks;
+}
+async function loadLabels() {
+  const labels = await api('labels' + (state.board ? '?board=' + state.board : ''));
+  const sel = document.getElementById('labelsel');
+  const cur = state.label;
+  sel.innerHTML = '<option value="">All labels</option>' + labels.map(l => '<option' + (l === cur ? ' selected' : '') + '>' + esc(l) + '</option>').join('');
+}
+
+// ---------- board view ----------
+function cardHTML(t) {
+  const over = t.due && !t.due_complete && t.status !== 'done' && new Date(t.due) < new Date();
+  const bits = [];
+  if (t.priority !== 'none') bits.push('<span class="pill ' + t.priority + '">' + t.priority + '</span>');
+  if (t.due) bits.push('<span class="duechip' + (over ? ' overdue' : (t.status === 'done' ? ' done' : '')) + '">' + new Date(t.due).toLocaleDateString(undefined, { month:'short', day:'numeric' }) + '</span>');
+  for (const l of t.labels || []) bits.push('<span class="lbl">' + esc(l) + '</span>');
+  if (!state.board) bits.push('<span class="bbadge" style="background:' + boardColor(t.board) + '">' + esc(boardName(t.board)) + '</span>');
+  if (t.n_items > 0) bits.push('<span class="cnt">☑ ' + t.n_items_done + '/' + t.n_items + '</span>');
+  if (t.n_comments > 0) bits.push('<span class="cnt">💬 ' + t.n_comments + '</span>');
+  return '<div class="card' + (t.archived ? ' archived' : '') + '" draggable="true" data-id="' + t.id + '">' +
+    '<div class="t">' + esc(t.title) + '</div>' +
+    (bits.length ? '<div class="meta">' + bits.join('') + '</div>' : '') + '</div>';
+}
+
+function renderBoard() {
+  document.getElementById('board').style.display = 'flex';
+  document.getElementById('dash').style.display = 'none';
+  document.getElementById('filterbar').style.visibility = 'visible';
+  const root = document.getElementById('board');
+  const cols = state.showref ? [...STATUS_COLS, 'reference'] : STATUS_COLS;
+  const byStatus = {};
+  for (const t of state.tasks) (byStatus[t.status] ||= []).push(t);
+  for (const k in byStatus) byStatus[k].sort((a, b) => PRI_ORDER[a.priority] - PRI_ORDER[b.priority] || a.position - b.position);
+
+  root.innerHTML = cols.map(st => {
+    const tasks = byStatus[st] || [];
+    let inner;
+    if (st === 'done') {
+      // group by monthly bucket, newest first; latest expanded
+      const buckets = new Map();
+      for (const t of tasks.sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''))) {
+        const key = t.bucket || 'Done';
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(t);
+      }
+      let i = 0;
+      inner = [...buckets.entries()].map(([name, ts]) => {
+        const open = state.expandedBuckets.has(name) || (i++ === 0 && !state.expandedBuckets.has('!' + name));
+        return '<div class="bucket-head" data-bucket="' + esc(name) + '">' + (open ? '▾' : '▸') + ' ' + esc(name) + ' · ' + ts.length + '</div>' +
+          (open ? '<div class="cards">' + ts.map(cardHTML).join('') + '</div>' : '');
+      }).join('');
+    } else {
+      inner = '<div class="cards">' + tasks.map(cardHTML).join('') + '</div>';
+    }
+    const add = st === 'done' || st === 'reference' ? '' :
+      '<div class="addrow"><button class="addbtn" data-add="' + st + '">＋ Add task</button></div>';
+    return '<div class="column" data-status="' + st + '"><h2>' + COL_NAMES[st] + '<span>' + tasks.length + '</span></h2>' + inner + add + '</div>';
+  }).join('');
+
+  // interactions
+  root.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', () => openModal(Number(el.dataset.id)));
+    el.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', el.dataset.id));
+  });
+  root.querySelectorAll('.column').forEach(col => {
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('dragover'); });
+    col.addEventListener('dragleave', () => col.classList.remove('dragover'));
+    col.addEventListener('drop', async e => {
+      e.preventDefault(); col.classList.remove('dragover');
+      const id = Number(e.dataTransfer.getData('text/plain'));
+      const status = col.dataset.status;
+      const t = state.tasks.find(x => x.id === id);
+      if (!t || t.status === status) return;
+      t.status = status; renderBoard();           // optimistic
+      const r = await api('tasks/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status }) });
+      if (r.error) { alert(r.error); }
+      await refresh();
+    });
+  });
+  root.querySelectorAll('.bucket-head').forEach(h => h.addEventListener('click', () => {
+    const name = h.dataset.bucket;
+    const isFirst = h.parentElement.querySelector('.bucket-head') === h;
+    if (h.textContent.startsWith('▾')) { state.expandedBuckets.delete(name); if (isFirst) state.expandedBuckets.add('!' + name); }
+    else { state.expandedBuckets.add(name); state.expandedBuckets.delete('!' + name); }
+    renderBoard();
+  }));
+  root.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', () => {
+    const row = btn.parentElement;
+    row.innerHTML = '<input placeholder="Task title — Enter to save" autofocus>';
+    const inp = row.querySelector('input');
+    inp.focus();
+    inp.addEventListener('keydown', async e => {
+      if (e.key === 'Escape') { renderBoard(); }
+      if (e.key === 'Enter' && inp.value.trim()) {
+        const r = await api('tasks', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ board: state.board || 'intuitive-intel', title: inp.value.trim(), status: btn.dataset.add }) });
+        if (r.error) alert(r.error);
+        await refresh();
+      }
+    });
+  }));
+}
+
+// ---------- modal ----------
+let modalTask = null;
+async function openModal(id) {
+  modalTask = await api('tasks/' + id);
+  if (modalTask.error) return alert(modalTask.error);
+  renderModal();
+  document.getElementById('overlay').style.display = 'block';
+}
+function closeModal() { document.getElementById('overlay').style.display = 'none'; modalTask = null; refresh(); }
+
+async function patchTask(patch) {
+  const r = await api('tasks/' + modalTask.id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch) });
+  if (r.error) { alert(r.error); return; }
+  modalTask = await api('tasks/' + modalTask.id);
+  renderModal();
+}
+
+function renderModal() {
+  const t = modalTask;
+  const m = document.getElementById('modal');
+  const dueval = t.due ? new Date(t.due).toISOString().slice(0, 10) : '';
+  m.innerHTML =
+    '<button id="mclose">✕</button>' +
+    '<h3><input id="mtitle" value="' + esc(t.title) + '"></h3>' +
+    '<div class="mrow">' +
+      '<label>Board <select id="mboard">' + state.boards.map(b => '<option value="' + b.key + '"' + (b.key === t.board ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') + '</select></label>' +
+      '<label>Status <select id="mstatus">' + ['icebox','todo','doing','done','reference'].map(s => '<option' + (s === t.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
+      '<label>Priority <select id="mpri">' + ['high','medium','low','none'].map(p => '<option' + (p === t.priority ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></label>' +
+      '<label>Due <input type="date" id="mdue" value="' + dueval + '"></label>' +
+    '</div>' +
+    '<div class="mrow"><label>Labels <input id="mlabels" value="' + esc((t.labels || []).join(', ')) + '" placeholder="comma, separated" style="width:240px"></label>' +
+      '<span class="cnt">' + (t.status === 'done' && t.bucket ? esc(t.bucket) + ' · ' : '') + 'created ' + new Date(t.created_at).toLocaleDateString() +
+      (t.completed_at ? ' · completed ' + new Date(t.completed_at).toLocaleDateString() : '') + '</span></div>' +
+    '<div class="msec"><h4>Description</h4><div id="mdesc">' + md(t.description) + '</div></div>' +
+    (t.checklists || []).map((cl, ci) =>
+      '<div class="msec"><h4>' + esc(cl.name) + '</h4>' +
+      cl.items.map((it, ii) => '<div class="clitem' + (it.done ? ' done' : '') + '"><input type="checkbox" data-cl="' + ci + '" data-it="' + ii + '"' + (it.done ? ' checked' : '') + '><span>' + esc(it.name) + '</span></div>').join('') +
+      '<input class="newitem" data-cl="' + ci + '" placeholder="Add item…" style="margin-top:4px;width:60%;padding:4px 8px;border:1px solid #c1c7d0;border-radius:4px"></div>'
+    ).join('') +
+    '<div class="msec"><h4>Comments (' + (t.comments || []).length + ')</h4>' +
+      (t.comments || []).map(c => '<div class="comment"><div class="who">' + esc(c.author) + ' · ' + new Date(c.created_at).toLocaleDateString() + '</div><div class="body">' + md(c.body) + '</div></div>').join('') +
+      '<textarea id="newcomment" placeholder="Write a comment…"></textarea>' +
+      '<div style="margin-top:6px;display:flex;gap:8px"><button class="primary" id="addcomment">Comment</button>' +
+      '<button class="quiet" id="march">' + (t.archived ? 'Unarchive' : 'Archive') + '</button>' +
+      (t.source_url ? '<a class="src" style="margin-left:auto" target="_blank" rel="noopener" href="' + esc(t.source_url) + '">View original ↗</a>' : '') +
+      '</div></div>';
+
+  m.querySelector('#mclose').onclick = closeModal;
+  m.querySelector('#mtitle').onchange = e => patchTask({ title: e.target.value.trim() || t.title });
+  m.querySelector('#mboard').onchange = e => patchTask({ board: e.target.value });
+  m.querySelector('#mstatus').onchange = e => patchTask({ status: e.target.value });
+  m.querySelector('#mpri').onchange = e => patchTask({ priority: e.target.value });
+  m.querySelector('#mdue').onchange = e => patchTask({ due: e.target.value ? e.target.value + 'T17:00:00Z' : null });
+  m.querySelector('#mlabels').onchange = e => patchTask({ labels: e.target.value.split(',').map(s => s.trim()).filter(Boolean) });
+  m.querySelector('#march').onclick = () => patchTask({ archived: !t.archived });
+  m.querySelector('#mdesc').onclick = () => {
+    const d = m.querySelector('#mdesc');
+    d.outerHTML = '<textarea id="mdesc-edit">' + esc(t.description) + '</textarea><div style="margin-top:6px"><button class="primary" id="savedesc">Save</button></div>';
+    m.querySelector('#savedesc').onclick = () => patchTask({ description: m.querySelector('#mdesc-edit').value });
+  };
+  m.querySelectorAll('input[type=checkbox][data-cl]').forEach(cb => cb.onchange = () => {
+    const cls = structuredClone(t.checklists);
+    cls[cb.dataset.cl].items[cb.dataset.it].done = cb.checked;
+    patchTask({ checklists: cls });
+  });
+  m.querySelectorAll('.newitem').forEach(inp => inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && inp.value.trim()) {
+      const cls = structuredClone(t.checklists);
+      cls[inp.dataset.cl].items.push({ name: inp.value.trim(), done: false });
+      patchTask({ checklists: cls });
+    }
+  }));
+  m.querySelector('#addcomment').onclick = async () => {
+    const v = m.querySelector('#newcomment').value.trim();
+    if (!v) return;
+    await api('tasks/' + t.id + '/comments', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ body: v }) });
+    modalTask = await api('tasks/' + t.id);
+    renderModal();
+  };
+}
+document.getElementById('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalTask) closeModal(); });
+
+// ---------- dashboard ----------
+const PRI_COLORS = { high:'#c9372c', medium:'#e07a06', low:'#7a869a', none:'#c1c7d0' };
+const ST_COLORS = { icebox:'#79a9f5', todo:'#8590a2', doing:'#22a06b' };
+let charts = [];
+async function renderDash() {
+  document.getElementById('board').style.display = 'none';
+  document.getElementById('dash').style.display = 'block';
+  document.getElementById('filterbar').style.visibility = 'hidden';
+  const s = await api('stats' + (state.board ? '?board=' + state.board : ''));
+  document.getElementById('tiles').innerHTML = [
+    [s.tiles.open_count, 'open tasks'],
+    [s.tiles.overdue, 'overdue'],
+    [s.tiles.done_this_month, 'completed this month'],
+    [s.tiles.avg_age_days + 'd', 'avg age of open tasks'],
+  ].map(([n, l]) => '<div class="tile"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>').join('');
+
+  charts.forEach(c => c.destroy()); charts = [];
+  const haveChart = !!window.Chart;
+
+  // board × status stacked bar
+  const boards = state.boards.map(b => b.key);
+  if (haveChart) {
+    charts.push(new Chart(document.getElementById('c-board'), {
+      type: 'bar',
+      data: { labels: boards.map(boardName),
+        datasets: ['icebox','todo','doing'].map(st => ({
+          label: st, backgroundColor: ST_COLORS[st],
+          data: boards.map(b => (s.byBoardStatus.find(r => r.board === b && r.status === st) || {}).n || 0),
+        })) },
+      options: { scales: { x: { stacked:true }, y: { stacked:true, ticks:{ precision:0 } } }, responsive:true },
+    }));
+    charts.push(new Chart(document.getElementById('c-pri'), {
+      type: 'doughnut',
+      data: { labels: s.byPriority.map(r => r.priority),
+        datasets: [{ data: s.byPriority.map(r => r.n), backgroundColor: s.byPriority.map(r => PRI_COLORS[r.priority]) }] },
+    }));
+    charts.push(new Chart(document.getElementById('c-month'), {
+      type: 'line',
+      data: { labels: s.monthly.map(r => r.month),
+        datasets: [
+          { label:'created', data: s.monthly.map(r => r.created), borderColor:'#0052cc', backgroundColor:'#0052cc', tension:.25 },
+          { label:'completed', data: s.monthly.map(r => r.completed), borderColor:'#22a06b', backgroundColor:'#22a06b', tension:.25 },
+        ] },
+      options: { scales: { y: { ticks:{ precision:0 } } } },
+    }));
+  } else {
+    // CDN fallback: plain tables
+    document.getElementById('f-board').innerHTML = '<pre>' + esc(JSON.stringify(s.byBoardStatus)) + '</pre>';
+    document.getElementById('f-pri').innerHTML = '<pre>' + esc(JSON.stringify(s.byPriority)) + '</pre>';
+    document.getElementById('f-month').innerHTML = '<pre>' + esc(JSON.stringify(s.monthly)) + '</pre>';
+  }
+
+  document.getElementById('duesoon').innerHTML = s.dueSoon.length
+    ? '<table class="due"><tr><th>Due</th><th>Task</th><th>Board</th><th>Status</th><th>Priority</th></tr>' +
+      s.dueSoon.map(t => {
+        const od = new Date(t.due) < new Date();
+        return '<tr data-id="' + t.id + '"><td class="' + (od ? 'od' : '') + '">' + new Date(t.due).toLocaleDateString() + (od ? ' (overdue)' : '') + '</td>' +
+          '<td>' + esc(t.title) + '</td><td>' + esc(boardName(t.board)) + '</td><td>' + t.status + '</td><td>' + (t.priority !== 'none' ? t.priority : '') + '</td></tr>';
+      }).join('') + '</table>'
+    : '<p class="cnt">Nothing due in the next 14 days 🎉</p>';
+  document.querySelectorAll('#duesoon tr[data-id]').forEach(tr => tr.addEventListener('click', () => openModal(Number(tr.dataset.id))));
+}
+
+// ---------- wiring ----------
+async function refresh() {
+  if (state.view === 'board') { await loadTasks(); renderBoard(); }
+  else await renderDash();
+}
+document.getElementById('viewtabs').addEventListener('click', e => {
+  const v = e.target.dataset?.view; if (!v) return;
+  state.view = v;
+  document.querySelectorAll('#viewtabs .tab').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  location.hash = v === 'dash' ? '#/dashboard' : '#/board';
+  refresh();
+});
+document.getElementById('boardtabs').addEventListener('click', async e => {
+  const b = e.target.closest('[data-board]'); if (!b) return;
+  state.board = b.dataset.board;
+  document.querySelectorAll('#boardtabs .tab').forEach(x => x.classList.toggle('active', x.dataset.board === state.board));
+  await loadLabels();
+  refresh();
+});
+document.querySelectorAll('.chip[data-pri]').forEach(ch => ch.addEventListener('click', () => {
+  state.pri = state.pri === ch.dataset.pri ? '' : ch.dataset.pri;
+  document.querySelectorAll('.chip[data-pri]').forEach(c => c.classList.toggle('active', c.dataset.pri === state.pri));
+  refresh();
+}));
+document.getElementById('labelsel').addEventListener('change', e => { state.label = e.target.value; refresh(); });
+let qt;
+document.getElementById('q').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value.trim(); refresh(); }, 300); });
+document.getElementById('showref').addEventListener('change', e => { state.showref = e.target.checked; refresh(); });
+document.getElementById('showarch').addEventListener('change', e => { state.showarch = e.target.checked; refresh(); });
+
+(async function init() {
+  if (location.hash.startsWith('#/dashboard')) {
+    state.view = 'dash';
+    document.querySelectorAll('#viewtabs .tab').forEach(b => b.classList.toggle('active', b.dataset.view === 'dash'));
+  }
+  await loadBoards();
+  await loadLabels();
+  await refresh();
+})();
+</script>
+</body>
+</html>
