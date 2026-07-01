@@ -152,7 +152,9 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const md = s => (window.marked ? marked.parse(s ?? '') : '<pre style="white-space:pre-wrap">' + esc(s) + '</pre>');
 const PRI_ORDER = { high:0, medium:1, low:2, none:3 };
 const STATUS_COLS = ['icebox','todo','doing','done'];
-const COL_NAMES = { icebox:'Icebox', todo:'To do', doing:'Doing', done:'Done', reference:'Reference' };
+const COL_NAMES = { icebox:'Icebox', todo:'To do', doing:'Doing', done:'Done', goals:'Goals', reference:'Reference' };
+// A "goal" is any task filed in the Goals bucket, regardless of status.
+const isGoal = t => (t.bucket || '').toLowerCase() === 'goals';
 
 const state = {
   view:'board', board:'', pri:'', label:'', q:'',
@@ -191,7 +193,7 @@ function cardHTML(t) {
   const over = t.due && !t.due_complete && t.status !== 'done' && new Date(t.due) < new Date();
   const bits = [];
   if (t.priority !== 'none') bits.push('<span class="pill ' + t.priority + '">' + t.priority + '</span>');
-  if (t.due) bits.push('<span class="duechip' + (over ? ' overdue' : (t.status === 'done' ? ' done' : '')) + '">' + new Date(t.due).toLocaleDateString(undefined, { month:'short', day:'numeric' }) + '</span>');
+  if (t.due) bits.push('<span class="duechip' + (over ? ' overdue' : ((t.due_complete || t.status === 'done') ? ' done' : '')) + '">' + new Date(t.due).toLocaleDateString(undefined, { month:'short', day:'numeric' }) + '</span>');
   for (const l of t.labels || []) bits.push('<span class="lbl">' + esc(l) + '</span>');
   if (!state.board) bits.push('<span class="bbadge" style="background:' + boardColor(t.board) + '">' + esc(boardName(t.board)) + '</span>');
   if (t.n_items > 0) bits.push('<span class="cnt">☑ ' + t.n_items_done + '/' + t.n_items + '</span>');
@@ -206,13 +208,15 @@ function renderBoard() {
   document.getElementById('dash').style.display = 'none';
   document.getElementById('filterbar').style.visibility = 'visible';
   const root = document.getElementById('board');
-  const cols = state.showref ? [...STATUS_COLS, 'reference'] : STATUS_COLS;
+  const cols = [...STATUS_COLS, 'goals', ...(state.showref ? ['reference'] : [])];
+  const bySort = (a, b) => PRI_ORDER[a.priority] - PRI_ORDER[b.priority] || a.position - b.position;
+  const goalTasks = state.tasks.filter(isGoal).sort(bySort);
   const byStatus = {};
-  for (const t of state.tasks) (byStatus[t.status] ||= []).push(t);
-  for (const k in byStatus) byStatus[k].sort((a, b) => PRI_ORDER[a.priority] - PRI_ORDER[b.priority] || a.position - b.position);
+  for (const t of state.tasks) { if (isGoal(t)) continue; (byStatus[t.status] ||= []).push(t); }
+  for (const k in byStatus) byStatus[k].sort(bySort);
 
   root.innerHTML = cols.map(st => {
-    const tasks = byStatus[st] || [];
+    const tasks = st === 'goals' ? goalTasks : (byStatus[st] || []);
     let inner;
     if (st === 'done') {
       // group by monthly bucket, newest first; latest expanded
@@ -231,7 +235,7 @@ function renderBoard() {
     } else {
       inner = '<div class="cards">' + tasks.map(cardHTML).join('') + '</div>';
     }
-    const add = st === 'done' || st === 'reference' ? '' :
+    const add = st === 'done' || st === 'reference' || st === 'goals' ? '' :
       '<div class="addrow"><button class="addbtn" data-add="' + st + '">＋ Add task</button></div>';
     return '<div class="column" data-status="' + st + '"><h2>' + COL_NAMES[st] + '<span>' + tasks.length + '</span></h2>' + inner + add + '</div>';
   }).join('');
@@ -247,11 +251,21 @@ function renderBoard() {
     col.addEventListener('drop', async e => {
       e.preventDefault(); col.classList.remove('dragover');
       const id = Number(e.dataTransfer.getData('text/plain'));
-      const status = col.dataset.status;
+      const target = col.dataset.status;
       const t = state.tasks.find(x => x.id === id);
-      if (!t || t.status === status) return;
-      t.status = status; renderBoard();           // optimistic
-      const r = await api('tasks/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status }) });
+      if (!t) return;
+      // Goals is a bucket, not a status: dropping into it files the card as a
+      // goal; dropping a goal into a status column moves it back out (move_task
+      // resets the bucket to the new status).
+      let patch;
+      if (target === 'goals') {
+        if (isGoal(t)) return;
+        patch = { status: 'reference', bucket: 'Goals' };
+      } else {
+        if (!isGoal(t) && t.status === target) return;
+        patch = { status: target };
+      }
+      const r = await api('tasks/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch) });
       if (r.error) { alert(r.error); }
       await refresh();
     });
